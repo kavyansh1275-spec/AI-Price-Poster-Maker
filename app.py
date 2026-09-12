@@ -2,6 +2,7 @@ import streamlit as st
 from PIL import Image
 
 from ai_copy import generate_copy
+from app_utils import safe_filename
 from batch_engine import build_batch_posters, parse_product_csv, posters_to_zip
 from comparison_engine import PriceEntry, compare_prices, parse_csv_text
 from comparison_poster import image_to_png_bytes as comparison_png_bytes, render_comparison_poster
@@ -10,11 +11,18 @@ from formats import FORMATS, render_social
 from poster_engine import calculate_discount, image_to_png_bytes, render_poster
 
 st.set_page_config(page_title="AI Price Poster Maker", page_icon="🛍️", layout="wide")
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_copy(product_name: str, discount: int, use_ollama: bool):
+    """Cache AI/fallback copy so Streamlit reruns don't repeatedly call Ollama."""
+    return generate_copy(product_name, discount, use_ollama=use_ollama)
+
 st.title("🛍️ AI Price Poster Maker")
 st.caption("Create sale creatives, compare prices, generate branded batches, and make AI creative variations.")
 mode = st.sidebar.radio("Mode", ["Sale Poster", "Price Comparison", "Batch Business", "AI Creative Lab"])
 
 if mode == "Sale Poster":
+    st.header("V6 — Sale Poster")
     with st.sidebar:
         st.header("Product details")
         product_name = st.text_input("Product name", "Premium Product")
@@ -24,17 +32,21 @@ if mode == "Sale Poster":
         social_format = st.selectbox("Export format", list(FORMATS))
         use_ollama = st.checkbox("Use local Ollama for AI copy", value=True)
         uploaded = st.file_uploader("Product photo", type=["png", "jpg", "jpeg", "webp"])
+        generate = st.button("✨ Generate poster", type="primary", use_container_width=True)
     if sale_price > mrp:
         st.error("Sale price cannot be greater than MRP.")
         st.stop()
     if not uploaded:
         st.info("Upload a product photo in the sidebar to generate a poster.")
         st.stop()
+    if not generate:
+        st.info("Set your options, then click **Generate poster**.")
+        st.stop()
     product_image = Image.open(uploaded).convert("RGB")
     discount = calculate_discount(mrp, sale_price)
     name = product_name.strip() or "Product"
     with st.spinner("Generating your creative..."):
-        copy = generate_copy(name, discount, use_ollama=use_ollama)
+        copy = cached_copy(name, discount, use_ollama)
         base_poster = render_poster(product_image, name, mrp, sale_price, template)
         social_poster = render_social(base_poster, copy["headline"], copy["subheadline"], copy["cta"], sale_price, mrp, discount, FORMATS[social_format])
     left, right = st.columns(2)
@@ -47,7 +59,8 @@ if mode == "Sale Poster":
     with right:
         st.subheader("Final poster")
         st.image(social_poster, use_container_width=True)
-        st.download_button("⬇️ Download PNG", data=image_to_png_bytes(social_poster), file_name="sale-poster.png", mime="image/png", use_container_width=True)
+        filename = f"{safe_filename(name)}-sale-poster.png"
+        st.download_button("⬇️ Download PNG", data=image_to_png_bytes(social_poster), file_name=filename, mime="image/png", use_container_width=True)
 
 elif mode == "Price Comparison":
     st.header("V3 — Price Comparison")
@@ -86,7 +99,8 @@ elif mode == "Price Comparison":
         for index, entry in enumerate(result["entries"], 1):
             marker = " 🏆 BEST DEAL" if entry == result["cheapest"] else ""
             st.write(f"**{index}. {entry.store}** — ₹{entry.price:,.2f}{marker}")
-        st.download_button("⬇️ Download comparison PNG", data=comparison_png_bytes(poster), file_name="price-comparison.png", mime="image/png", use_container_width=True)
+        filename = f"{safe_filename(product_name)}-price-comparison.png"
+        st.download_button("⬇️ Download comparison PNG", data=comparison_png_bytes(poster), file_name=filename, mime="image/png", use_container_width=True)
     with right:
         st.subheader("Comparison poster")
         st.image(poster, use_container_width=True)
@@ -120,7 +134,7 @@ elif mode == "Batch Business":
         posters = build_batch_posters(product_pairs, template, brand_name, brand_color, logo)
         zip_data = posters_to_zip(posters)
     st.success(f"Generated {len(posters)} posters successfully.")
-    st.download_button("⬇️ Download all posters (ZIP)", data=zip_data, file_name="branded-posters.zip", mime="application/zip", use_container_width=True)
+    st.download_button("⬇️ Download all posters (ZIP)", data=zip_data, file_name=f"{safe_filename(brand_name)}-posters.zip", mime="application/zip", use_container_width=True)
     st.subheader("Preview")
     preview_columns = st.columns(min(3, len(posters)))
     for column, (filename, poster) in zip(preview_columns, posters[:3]):
@@ -136,17 +150,21 @@ else:
         sale_price = st.number_input("Sale price (₹)", min_value=0.0, value=799.0, step=10.0, key="creative_sale")
         use_ollama = st.checkbox("Use local Ollama for copy", value=True, key="creative_ollama")
         uploaded = st.file_uploader("Product photo", type=["png", "jpg", "jpeg", "webp"], key="creative_image")
+        generate = st.button("✨ Generate variations", type="primary", use_container_width=True)
     if sale_price > mrp:
         st.error("Sale price cannot be greater than MRP.")
         st.stop()
     if not uploaded:
         st.info("Upload a product photo to generate variations.")
         st.stop()
+    if not generate:
+        st.info("Set your options, then click **Generate variations**.")
+        st.stop()
     product_image = Image.open(uploaded).convert("RGB")
     discount = calculate_discount(mrp, sale_price)
     name = product_name.strip() or "Product"
     with st.spinner("Creating AI variations..."):
-        copy = generate_copy(name, discount, use_ollama=use_ollama)
+        copy = cached_copy(name, discount, use_ollama)
         variations = generate_variations(product_image, name, mrp, sale_price, discount, copy["headline"], copy["cta"])
     st.success("3 creative variations generated.")
     cols = st.columns(3)
@@ -154,5 +172,6 @@ else:
         with col:
             st.subheader(variation_name)
             st.image(poster, use_container_width=True)
-            st.download_button("⬇️ Download", data=image_to_png_bytes(poster), file_name=f"{variation_name.lower().replace(' ', '-')}.png", mime="image/png", use_container_width=True)
+            filename = f"{safe_filename(name)}-{safe_filename(variation_name)}.png"
+            st.download_button("⬇️ Download", data=image_to_png_bytes(poster), file_name=filename, mime="image/png", use_container_width=True)
     st.caption(f"AI headline: {copy['headline']} · CTA: {copy['cta']}")
