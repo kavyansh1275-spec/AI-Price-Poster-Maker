@@ -1,4 +1,4 @@
-"""V4 batch/business poster generation utilities."""
+"""V4/V9 batch and branded poster generation utilities."""
 
 from __future__ import annotations
 
@@ -52,22 +52,25 @@ def parse_product_csv(text: str) -> list[ProductRow]:
     return products
 
 
-def apply_branding(image: Image.Image, brand_name: str, brand_color: str, logo: Image.Image | None = None) -> Image.Image:
-    """Add a small branded header without changing the poster's dimensions."""
+def apply_branding(image: Image.Image, brand_name: str, brand_color: str, logo: Image.Image | None = None, tagline: str = "", accent_color: str | None = None) -> Image.Image:
+    """Add a reusable brand header without changing poster dimensions."""
     canvas = image.convert("RGB").copy()
     draw = ImageDraw.Draw(canvas)
     width, height = canvas.size
-    bar_height = max(64, height // 16)
-    try:
-        color = brand_color.strip() or "#111111"
-        if not color.startswith("#") or len(color) not in (4, 7):
-            raise ValueError
-    except ValueError:
+    bar_height = max(72, height // 14)
+    color = brand_color.strip() or "#111111"
+    if not color.startswith("#") or len(color) not in (4, 7):
         color = "#111111"
+    accent = accent_color.strip() if accent_color else color
+    if not accent.startswith("#") or len(accent) not in (4, 7):
+        accent = color
 
     draw.rectangle((0, 0, width, bar_height), fill=color)
     text = (brand_name or "Your Store").strip()[:40]
-    draw.text((24, max(10, bar_height // 2 - 12)), text, fill="white")
+    draw.text((24, 16), text, fill="white")
+    if tagline.strip():
+        draw.text((24, max(38, bar_height // 2 + 4)), tagline.strip()[:55], fill="white")
+    draw.rectangle((0, bar_height - 5, width, bar_height), fill=accent)
 
     if logo is not None:
         mark = logo.convert("RGBA").copy()
@@ -75,22 +78,15 @@ def apply_branding(image: Image.Image, brand_name: str, brand_color: str, logo: 
         x = width - mark.width - 16
         y = (bar_height - mark.height) // 2
         canvas.paste(mark, (x, y), mark)
-
     return canvas
 
 
-def build_batch_posters(
-    products: Iterable[tuple[ProductRow, Image.Image]],
-    template: str,
-    brand_name: str,
-    brand_color: str,
-    logo: Image.Image | None = None,
-) -> list[tuple[str, Image.Image]]:
+def build_batch_posters(products: Iterable[tuple[ProductRow, Image.Image]], template: str, brand_name: str, brand_color: str, logo: Image.Image | None = None, tagline: str = "", accent_color: str | None = None) -> list[tuple[str, Image.Image]]:
     """Render and brand a batch of product posters."""
     results: list[tuple[str, Image.Image]] = []
     for product, product_image in products:
         poster = render_poster(product_image, product.name, product.mrp, product.sale_price, template)
-        poster = apply_branding(poster, brand_name, brand_color, logo)
+        poster = apply_branding(poster, brand_name, brand_color, logo, tagline, accent_color)
         safe_name = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in product.name).strip("_") or "product"
         results.append((f"{safe_name}.png", poster))
     return results
