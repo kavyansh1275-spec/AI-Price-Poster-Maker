@@ -1,6 +1,6 @@
 # AI Price Poster Maker
 
-AI-assisted sale creative, price comparison, bulk branded poster generation, and AI creative variations for local shops and small businesses.
+AI-assisted sale creative, price comparison, bulk branded poster generation, AI creative variations, and a monetization workflow for local shops and small businesses.
 
 ## Features
 
@@ -36,11 +36,40 @@ AI-assisted sale creative, price comparison, bulk branded poster generation, and
 - Reuse AI-generated headline and CTA
 - Download each variation separately
 
+### V6 — Production Polish
+- Cached AI copy to reduce repeated Ollama calls
+- Explicit generation buttons for heavier operations
+- Safe export filenames
+- Docker deployment files
+- Automated regression tests
+
+### V7 — Monetization Business Toolkit
+- Starter, Growth, and Pro service packages
+- Automatic client quote calculation
+- Optional negotiation discount
+- Ready-to-send sales message
+- Delivery checklist for client projects
+- Standalone Streamlit business workflow via `business_app.py`
+
 ## Run locally
+
+Main poster app:
 
 ```bash
 python -m pip install -r requirements.txt
 python -m streamlit run app.py
+```
+
+Business/monetization toolkit:
+
+```bash
+python -m streamlit run business_app.py
+```
+
+Run tests:
+
+```bash
+pytest -q
 ```
 
 ### V4 catalog format
