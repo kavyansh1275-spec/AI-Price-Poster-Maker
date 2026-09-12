@@ -1,6 +1,6 @@
 # AI Price Poster Maker
 
-AI-assisted sale creative, price comparison, bulk branded poster generation, AI creative variations, and a monetization workflow for local shops and small businesses.
+AI-assisted sale creative, price comparison, bulk branded poster generation, AI creative variations, monetization workflow, and lightweight local image enhancement for local shops and small businesses.
 
 ## Features
 
@@ -51,6 +51,15 @@ AI-assisted sale creative, price comparison, bulk branded poster generation, AI 
 - Delivery checklist for client projects
 - Standalone Streamlit business workflow via `business_app.py`
 
+### V8 — Local Image Enhancement
+- Lightweight local product-image enhancement
+- Contrast, color, and sharpening improvements
+- Optional local upscaling
+- Enhanced creative pipeline feeding the existing promotional layouts
+- PNG byte export helper
+
+> V8 image processing is intentionally lightweight and local. It is not claimed to be generative AI or perfect background removal.
+
 ## Run locally
 
 Main poster app:
@@ -90,3 +99,11 @@ The `image_name` values must match uploaded product filenames.
 - V5: AI creative variations and stronger image processing
 - V6: Production deployment and performance polish
 - V7: Monetization-ready local-business workflow
+- V8: Local image enhancement
+- V9: Advanced brand engine
+- V10: Multi-platform ad creative generation
+- V11: Client dashboard
+- V12: Cloud deployment
+- V13: End-to-end automation
+- V14: Business intelligence
+- V15: Full SaaS platform
