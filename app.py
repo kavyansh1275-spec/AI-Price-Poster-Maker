@@ -1,7 +1,10 @@
+import io
+
 import streamlit as st
 from PIL import Image
 
 from ai_copy import generate_copy
+from batch_engine import ProductRow, build_batch_posters, parse_product_csv, posters_to_zip
 from comparison_engine import PriceEntry, compare_prices, parse_csv_text
 from comparison_poster import image_to_png_bytes as comparison_png_bytes, render_comparison_poster
 from formats import FORMATS, render_social
@@ -10,9 +13,9 @@ from poster_engine import calculate_discount, image_to_png_bytes, render_poster
 st.set_page_config(page_title="AI Price Poster Maker", page_icon="🛍️", layout="wide")
 
 st.title("🛍️ AI Price Poster Maker")
-st.caption("Create sale creatives and compare prices from one simple app.")
+st.caption("Create sale creatives, compare prices, and generate branded batches from one app.")
 
-mode = st.sidebar.radio("Mode", ["Sale Poster", "Price Comparison"])
+mode = st.sidebar.radio("Mode", ["Sale Poster", "Price Comparison", "Batch Business"])
 
 if mode == "Sale Poster":
     with st.sidebar:
@@ -58,7 +61,7 @@ if mode == "Sale Poster":
         st.write(copy["subheadline"])
         st.code(copy["cta"], language=None)
         st.metric("Discount", f"{discount}% OFF")
-        st.caption("V2 includes local AI copy and lightweight smart background cleanup for plain-background product shots.")
+        st.caption("V2 includes local AI copy with a deterministic fallback when Ollama is unavailable.")
 
     with right:
         st.subheader("Final poster")
@@ -74,7 +77,7 @@ if mode == "Sale Poster":
     with st.expander("Original product photo"):
         st.image(product_image, use_container_width=True)
 
-else:
+elif mode == "Price Comparison":
     st.header("V3 — Price Comparison")
     st.write("Enter prices from different stores, or import a CSV, and generate a comparison poster.")
 
@@ -135,3 +138,64 @@ else:
     with right:
         st.subheader("Comparison poster")
         st.image(poster, use_container_width=True)
+
+else:
+    st.header("V4 — Batch Business Mode")
+    st.write("Create a consistent set of branded sale posters for a shop's product catalog and download them as one ZIP.")
+
+    with st.sidebar:
+        st.header("Brand settings")
+        brand_name = st.text_input("Business / brand name", "Your Store")
+        brand_color = st.color_picker("Brand color", "#111111")
+        template = st.selectbox("Poster template", ["Bold Sale", "Minimal", "Shop Offer"], key="batch_template")
+        logo_file = st.file_uploader("Optional logo", type=["png", "jpg", "jpeg", "webp"], key="batch_logo")
+
+    st.subheader("1. Upload product catalog")
+    st.caption("CSV columns: name,mrp,sale_price,image_name. Upload the matching product images below.")
+    catalog_file = st.file_uploader("Product catalog CSV", type=["csv"], key="batch_catalog")
+    image_files = st.file_uploader(
+        "Product images (filenames must match image_name in CSV)",
+        type=["png", "jpg", "jpeg", "webp"],
+        accept_multiple_files=True,
+        key="batch_images",
+    )
+
+    if catalog_file is None:
+        st.info("Upload a catalog CSV to start the batch generator.")
+        st.stop()
+
+    try:
+        products = parse_product_csv(catalog_file.getvalue().decode("utf-8-sig"))
+    except (UnicodeDecodeError, ValueError) as exc:
+        st.error(str(exc))
+        st.stop()
+
+    image_map = {file.name: Image.open(file).convert("RGB") for file in image_files}
+    missing = [product.image_name for product in products if product.image_name not in image_map]
+
+    st.write(f"**Catalog:** {len(products)} products")
+    if missing:
+        st.warning(f"Missing {len(missing)} image(s): {', '.join(missing[:8])}{'…' if len(missing) > 8 else ''}")
+        st.stop()
+
+    logo = Image.open(logo_file).convert("RGBA") if logo_file else None
+    product_pairs = [(product, image_map[product.image_name]) for product in products]
+
+    with st.spinner(f"Generating {len(product_pairs)} branded posters..."):
+        posters = build_batch_posters(product_pairs, template, brand_name, brand_color, logo)
+        zip_data = posters_to_zip(posters)
+
+    st.success(f"Generated {len(posters)} posters successfully.")
+    st.download_button(
+        "⬇️ Download all posters (ZIP)",
+        data=zip_data,
+        file_name="branded-posters.zip",
+        mime="application/zip",
+        use_container_width=True,
+    )
+
+    st.subheader("Preview")
+    preview_columns = st.columns(min(3, len(posters)))
+    for column, (filename, poster) in zip(preview_columns, posters[:3]):
+        with column:
+            st.image(poster, caption=filename, use_container_width=True)
