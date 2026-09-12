@@ -4,17 +4,18 @@ from PIL import Image
 from ai_copy import generate_copy
 from app_utils import safe_filename
 from batch_engine import build_batch_posters, parse_product_csv, posters_to_zip
+from brand_engine import make_brand_kit, save_brand_kit, load_brand_kit
 from comparison_engine import PriceEntry, compare_prices, parse_csv_text
 from comparison_poster import image_to_png_bytes as comparison_png_bytes, render_comparison_poster
 from creative_engine import generate_variations
 from formats import FORMATS, render_social
+from image_ai import prepare_product_image
 from poster_engine import calculate_discount, image_to_png_bytes, render_poster
 
 st.set_page_config(page_title="AI Price Poster Maker", page_icon="🛍️", layout="wide")
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def cached_copy(product_name: str, discount: int, use_ollama: bool):
-    """Cache AI/fallback copy so Streamlit reruns don't repeatedly call Ollama."""
     return generate_copy(product_name, discount, use_ollama=use_ollama)
 
 st.title("🛍️ AI Price Poster Maker")
@@ -22,7 +23,7 @@ st.caption("Create sale creatives, compare prices, generate branded batches, and
 mode = st.sidebar.radio("Mode", ["Sale Poster", "Price Comparison", "Batch Business", "AI Creative Lab"])
 
 if mode == "Sale Poster":
-    st.header("V6 — Sale Poster")
+    st.header("V8 — Enhanced Sale Poster")
     with st.sidebar:
         st.header("Product details")
         product_name = st.text_input("Product name", "Premium Product")
@@ -31,6 +32,7 @@ if mode == "Sale Poster":
         template = st.selectbox("Base template", ["Bold Sale", "Minimal", "Shop Offer"])
         social_format = st.selectbox("Export format", list(FORMATS))
         use_ollama = st.checkbox("Use local Ollama for AI copy", value=True)
+        enhancement = st.selectbox("Product image processing", ["Off", "Enhance", "Enhance + 2x Upscale"])
         uploaded = st.file_uploader("Product photo", type=["png", "jpg", "jpeg", "webp"])
         generate = st.button("✨ Generate poster", type="primary", use_container_width=True)
     if sale_price > mrp:
@@ -43,6 +45,8 @@ if mode == "Sale Poster":
         st.info("Set your options, then click **Generate poster**.")
         st.stop()
     product_image = Image.open(uploaded).convert("RGB")
+    if enhancement != "Off":
+        product_image = prepare_product_image(product_image, enhance=True, upscale=2 if enhancement.endswith("2x Upscale") else 1).convert("RGB")
     discount = calculate_discount(mrp, sale_price)
     name = product_name.strip() or "Product"
     with st.spinner("Generating your creative..."):
@@ -106,13 +110,29 @@ elif mode == "Price Comparison":
         st.image(poster, use_container_width=True)
 
 elif mode == "Batch Business":
-    st.header("V4 — Batch Business Mode")
+    st.header("V9 — Brand Kit + Batch Business")
     st.write("Create consistent branded sale posters for a product catalog and download them as one ZIP.")
     with st.sidebar:
+        st.header("Brand Kit")
         brand_name = st.text_input("Business / brand name", "Your Store")
-        brand_color = st.color_picker("Brand color", "#111111")
+        primary = st.color_picker("Primary color", "#111111")
+        secondary = st.color_picker("Secondary color", "#FFFFFF")
+        accent = st.color_picker("Accent color", "#E53935")
+        tagline = st.text_input("Tagline", "")
         template = st.selectbox("Poster template", ["Bold Sale", "Minimal", "Shop Offer"], key="batch_template")
         logo_file = st.file_uploader("Optional logo", type=["png", "jpg", "jpeg", "webp"], key="batch_logo")
+        import_kit = st.file_uploader("Load saved Brand Kit (.json)", type=["json"], key="brand_json")
+    try:
+        if import_kit is not None:
+            kit = load_brand_kit(import_kit.getvalue().decode("utf-8"))
+            brand_name, primary, secondary, accent, tagline = kit.name, kit.primary, kit.secondary, kit.accent, kit.tagline
+            st.sidebar.success("Brand Kit loaded.")
+        else:
+            kit = make_brand_kit(brand_name, primary, secondary, accent, tagline)
+    except (UnicodeDecodeError, ValueError) as exc:
+        st.sidebar.error(str(exc))
+        st.stop()
+    st.sidebar.download_button("⬇️ Save Brand Kit", data=save_brand_kit(kit), file_name=f"{safe_filename(kit.name)}-brand-kit.json", mime="application/json", use_container_width=True)
     catalog_file = st.file_uploader("Product catalog CSV", type=["csv"], key="batch_catalog")
     image_files = st.file_uploader("Product images (filenames must match image_name)", type=["png", "jpg", "jpeg", "webp"], accept_multiple_files=True, key="batch_images")
     if catalog_file is None:
@@ -131,10 +151,10 @@ elif mode == "Batch Business":
     logo = Image.open(logo_file).convert("RGBA") if logo_file else None
     product_pairs = [(p, image_map[p.image_name]) for p in products]
     with st.spinner(f"Generating {len(product_pairs)} branded posters..."):
-        posters = build_batch_posters(product_pairs, template, brand_name, brand_color, logo)
+        posters = build_batch_posters(product_pairs, template, kit.name, kit.primary, logo, kit.tagline, kit.accent)
         zip_data = posters_to_zip(posters)
     st.success(f"Generated {len(posters)} posters successfully.")
-    st.download_button("⬇️ Download all posters (ZIP)", data=zip_data, file_name=f"{safe_filename(brand_name)}-posters.zip", mime="application/zip", use_container_width=True)
+    st.download_button("⬇️ Download all posters (ZIP)", data=zip_data, file_name=f"{safe_filename(kit.name)}-posters.zip", mime="application/zip", use_container_width=True)
     st.subheader("Preview")
     preview_columns = st.columns(min(3, len(posters)))
     for column, (filename, poster) in zip(preview_columns, posters[:3]):
@@ -142,13 +162,14 @@ elif mode == "Batch Business":
             st.image(poster, caption=filename, use_container_width=True)
 
 else:
-    st.header("V5 — AI Creative Lab")
+    st.header("V8 — AI Creative Lab")
     st.write("Generate three distinct promotional poster variations from one product photo and AI marketing copy.")
     with st.sidebar:
         product_name = st.text_input("Product name", "Premium Product", key="creative_name")
         mrp = st.number_input("MRP (₹)", min_value=1.0, value=999.0, step=10.0, key="creative_mrp")
         sale_price = st.number_input("Sale price (₹)", min_value=0.0, value=799.0, step=10.0, key="creative_sale")
         use_ollama = st.checkbox("Use local Ollama for copy", value=True, key="creative_ollama")
+        enhancement = st.checkbox("Enhance product image", value=True, key="creative_enhance")
         uploaded = st.file_uploader("Product photo", type=["png", "jpg", "jpeg", "webp"], key="creative_image")
         generate = st.button("✨ Generate variations", type="primary", use_container_width=True)
     if sale_price > mrp:
@@ -161,6 +182,8 @@ else:
         st.info("Set your options, then click **Generate variations**.")
         st.stop()
     product_image = Image.open(uploaded).convert("RGB")
+    if enhancement:
+        product_image = prepare_product_image(product_image, enhance=True).convert("RGB")
     discount = calculate_discount(mrp, sale_price)
     name = product_name.strip() or "Product"
     with st.spinner("Creating AI variations..."):
