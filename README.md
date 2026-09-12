@@ -1,6 +1,6 @@
 # AI Price Poster Maker
 
-AI-assisted sale creative, price comparison, and bulk branded poster generator for local shops and small businesses.
+AI-assisted sale creative, price comparison, bulk branded poster generation, and AI creative variations for local shops and small businesses.
 
 ## Features
 
@@ -8,8 +8,8 @@ AI-assisted sale creative, price comparison, and bulk branded poster generator f
 - Upload a product photo
 - Enter product name, MRP, and sale price
 - Automatically calculate discount
-- Choose from poster templates
-- Preview and download a PNG
+- Choose poster templates
+- Preview and download PNG
 
 ### V2 — AI Creative
 - Local Ollama marketing-copy generation
@@ -19,16 +19,22 @@ AI-assisted sale creative, price comparison, and bulk branded poster generator f
 ### V3 — Price Comparison
 - Compare prices across stores
 - Import comparison CSVs
-- Highlight the cheapest option and maximum savings
-- Generate a comparison poster
+- Highlight cheapest option and maximum savings
+- Generate comparison poster
 
 ### V4 — Batch Business Mode
-- Import a product catalog CSV
+- Import product catalog CSV
 - Match multiple product images by filename
-- Apply a business name and brand color
-- Add an optional logo
+- Apply business name and brand color
+- Add optional logo
 - Generate a complete poster set
 - Download every poster as one ZIP
+
+### V5 — AI Creative Lab
+- Generate three distinct promotional variations from one product image
+- Flash Sale, Weekend Deal, and Premium Offer designs
+- Reuse AI-generated headline and CTA
+- Download each variation separately
 
 ## Run locally
 
@@ -45,7 +51,7 @@ Running Shoes,2999,1999,shoes.jpg
 Travel Bag,1999,1299,bag.png
 ```
 
-The `image_name` values must match the uploaded product filenames.
+The `image_name` values must match uploaded product filenames.
 
 ## Roadmap
 - V1: Core poster maker
